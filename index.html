@@ -17,6 +17,16 @@
 }
 *{box-sizing:border-box}
 body{
+  <div id="lock" style="position:fixed;inset:0;background:#0c0c0e;z-index:999;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#f4f4f5">
+  <div style="width:min(360px,90vw);background:#141418;border:1px solid #26262d;border-radius:12px;padding:24px;box-sizing:border-box">
+    <h2 id="lockTitle" style="margin:0 0 6px;font-size:18px">Desbloquear</h2>
+    <p id="lockHint" style="margin:0 0 16px;color:#8e8e99;font-size:13px"></p>
+    <input id="lockPass" type="password" placeholder="Contraseña" style="width:100%;padding:10px;border-radius:8px;border:1px solid #26262d;background:#0c0c0e;color:#f4f4f5;margin-bottom:8px;box-sizing:border-box">
+    <input id="lockPass2" type="password" placeholder="Repite la contraseña" style="display:none;width:100%;padding:10px;border-radius:8px;border:1px solid #26262d;background:#0c0c0e;color:#f4f4f5;margin-bottom:8px;box-sizing:border-box">
+    <button id="lockBtn" style="width:100%;padding:10px;border:0;border-radius:8px;background:#f5a524;color:#111;font-weight:600;cursor:pointer">Entrar</button>
+    <p id="lockMsg" style="color:#ef4444;font-size:13px;min-height:18px;margin:10px 0 0"></p>
+  </div>
+</div>
   margin:0;background:var(--bg);color:var(--ink);
   font-family:Inter,"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
   font-size:14px;-webkit-font-smoothing:antialiased;
