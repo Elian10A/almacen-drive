@@ -14,12 +14,13 @@ main{padding:12px;max-width:900px;margin:auto}
 .card{background:#fff;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px #0002}
 button{padding:8px 12px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;margin:2px 6px 2px 0}
 button.sec{background:#6b7280}
-.bar{height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden}
+.bar{height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden;margin:6px 0 10px}
 .bar>div{height:100%;background:#2563eb}
 table{width:100%;border-collapse:collapse;font-size:14px}
 td,th{padding:6px;border-bottom:1px solid #e5e7eb;text-align:left}
 input[type=search]{width:100%;padding:8px;box-sizing:border-box;font-size:16px}
 .muted{color:#6b7280;font-size:13px}
+.err{color:#b91c1c;font-size:13px}
 .name{word-break:break-word}
 </style>
 </head>
@@ -27,10 +28,9 @@ input[type=search]{width:100%;padding:8px;box-sizing:border-box;font-size:16px}
 <header><strong>Mi Drive</strong></header>
 <main>
   <div class="card">
-    <div id="quota" class="muted">No conectado.</div>
-    <div class="bar" style="margin:8px 0"><div id="bar" style="width:0%"></div></div>
-    <button id="btnConnect" onclick="connect()">Conectar Google Drive</button>
-    <button id="btnLogout" class="sec" onclick="logout()" style="display:none">Desconectar</button>
+    <div id="accounts"></div>
+    <div id="totals" class="muted"></div>
+    <button onclick="connect()">Agregar cuenta de Google</button>
   </div>
   <div class="card">
     <h3 style="margin-top:0">Subir archivo</h3>
@@ -42,7 +42,7 @@ input[type=search]{width:100%;padding:8px;box-sizing:border-box;font-size:16px}
     <input type="search" id="search" placeholder="Buscar archivos" oninput="render()">
     <div id="status" class="muted" style="margin:8px 0"></div>
     <table>
-      <thead><tr><th>Nombre</th><th>Tamaño</th><th></th></tr></thead>
+      <thead><tr><th>Nombre</th><th>Cuenta</th><th>Tamaño</th><th></th></tr></thead>
       <tbody id="files"></tbody>
     </table>
   </div>
