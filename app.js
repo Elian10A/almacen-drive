@@ -2,11 +2,13 @@
 const CLIENT_ID = "685413975165-tgeug7mgpu3p7ku8it4eh8l31cj5kfni.apps.googleusercontent.com";
 const SCOPE = "https://www.googleapis.com/auth/drive";
 const DRIVE = "https://www.googleapis.com/drive/v3";
+const PALETTE = ["#2563eb", "#059669", "#d97706", "#db2777", "#7c3aed", "#0891b2"];
 
 let tokenClient = null;
 let pending = null;
 let accounts = JSON.parse(localStorage.getItem("accounts") || "[]");
-let files = [];
+let files = [];   // todos los archivos de todas las cuentas (nombres)
+let shown = [];   // lo que se muestra en resultados
 
 const $ = id => document.getElementById(id);
 
@@ -28,7 +30,16 @@ function fmt(n) {
   return n.toFixed(i ? 1 : 0) + " " + u[i];
 }
 
-function status(msg) { $("status").textContent = msg; }
+function colorOf(email) {
+  const i = accounts.findIndex(a => a.email === email);
+  return PALETTE[(i < 0 ? 0 : i) % PALETTE.length];
+}
+
+function escQ(s) { return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
+
+function setSummary(msg) { $("summary").textContent = msg; }
+
+const byName = (a, b) => a.name.localeCompare(b.name);
 
 // ---------- Autenticación ----------
 
@@ -41,16 +52,15 @@ function initAuth() {
   });
   renderAccounts();
   if (accounts.length) refreshAll();
-  else status("Pulsa Agregar cuenta de Google.");
+  else setSummary("Agrega una cuenta de Google para empezar.");
 }
 
-// Se ejecuta cada vez que Google devuelve un token
 async function onToken(r) {
   const p = pending;
   pending = null;
   if (r.error) {
     if (p) p.reject(new Error("Google: " + r.error));
-    else status("Google no dio acceso: " + r.error);
+    else setSummary("Google no dio acceso: " + r.error);
     return;
   }
   try {
@@ -76,18 +86,16 @@ async function onToken(r) {
     }
   } catch (e) {
     if (p) p.reject(e);
-    else status(e.message);
+    else setSummary(e.message);
   }
 }
 
-// Abre el selector para agregar una cuenta nueva
 function connect() {
-  if (!tokenClient) return status("Google todavía está cargando, intenta de nuevo.");
+  if (!tokenClient) return setSummary("Google todavía está cargando, intenta de nuevo.");
   pending = null;
   tokenClient.requestAccessToken({ prompt: "select_account" });
 }
 
-// Devuelve un token válido de esa cuenta, renovándolo en silencio si hace falta
 function tokenFor(acc) {
   if (acc.token && Date.now() < acc.exp - 60000) return Promise.resolve(acc.token);
   return new Promise((resolve, reject) => {
@@ -98,11 +106,14 @@ function tokenFor(acc) {
 }
 
 function removeAccount(email) {
+  if (!confirm("Quitar " + email + " de la app?")) return;
   const acc = accounts.find(a => a.email === email);
   if (acc && acc.token && window.google) google.accounts.oauth2.revoke(acc.token, () => {});
   accounts = accounts.filter(a => a.email !== email);
+  files = files.filter(f => f.acc !== email);
   save();
-  refreshAll();
+  renderAccounts();
+  runSearch();
 }
 
 // ---------- Llamadas a Drive ----------
@@ -118,7 +129,7 @@ async function api(acc, url, opts = {}) {
   return r;
 }
 
-async function listFiles(acc) {
+async function listNames(acc) {
   const out = [];
   let pt = "";
   do {
@@ -145,7 +156,7 @@ async function refreshAll() {
         total: j.storageQuota.limit ? Number(j.storageQuota.limit) : null
       };
       acc.error = "";
-      files.push(...await listFiles(acc));
+      files.push(...await listNames(acc));
     } catch (e) {
       acc.quota = null;
       acc.error = e.message;
@@ -153,10 +164,10 @@ async function refreshAll() {
   }
   save();
   renderAccounts();
-  render();
+  if ($("mode").value !== "content") runSearch();
 }
 
-// ---------- Vista ----------
+// ---------- Cuentas ----------
 
 function renderAccounts() {
   const el = $("accounts");
@@ -168,39 +179,112 @@ function renderAccounts() {
   el.innerHTML = accounts.map(a => {
     const q = a.quota;
     const pct = q && q.total ? Math.min(100, q.used / q.total * 100) : 0;
+    const cls = pct > 90 ? "danger" : pct > 70 ? "warn" : "";
     const info = a.error
-      ? `<span class="err">${esc(a.error)}</span>`
-      : q ? `<span class="muted">${fmt(q.used)} de ${q.total ? fmt(q.total) : "?"}</span>`
-          : `<span class="muted">Cargando...</span>`;
-    return `<div>
-      <strong>${esc(a.email)}</strong> ${info}
-      <button class="sec" onclick="removeAccount('${esc(a.email)}')">Quitar</button>
-      <div class="bar"><div style="width:${pct}%"></div></div>
+      ? `<p class="err">${esc(a.error)}</p>`
+      : q ? `<p class="muted">${fmt(q.used)} de ${q.total ? fmt(q.total) : "?"}</p>`
+          : `<p class="muted">Cargando...</p>`;
+    return `<div class="acc" style="--c:${colorOf(a.email)}">
+      <div class="acc-top"><span class="dot"></span>${esc(a.email)}</div>
+      ${info}
+      <div class="bar ${cls}"><div style="width:${pct}%"></div></div>
+      <button class="ghost small" data-rm="${esc(a.email)}">Quitar</button>
     </div>`;
   }).join("");
+
   const used = accounts.reduce((s, a) => s + ((a.quota && a.quota.used) || 0), 0);
   const total = accounts.reduce((s, a) => s + ((a.quota && a.quota.total) || 0), 0);
-  $("totals").textContent = total ? `Total: ${fmt(used)} usados de ${fmt(total)}` : "";
+  $("totals").textContent = total ? `${fmt(used)} de ${fmt(total)} usados` : "";
 }
 
-function render() {
-  const term = $("search").value.trim().toLowerCase();
-  const list = files
-    .map((f, i) => ({ f, i }))
-    .filter(x => x.f.name.toLowerCase().includes(term))
-    .sort((a, b) => a.f.name.localeCompare(b.f.name))
-    .slice(0, 500);
-  $("files").innerHTML = list.map(({ f, i }) =>
-    `<tr><td class="name">${esc(f.name)}</td><td class="muted">${esc(f.acc)}</td><td>${fmt(f.size)}</td>
-     <td><button class="sec" onclick="download(${i})">Descargar</button></td></tr>`
-  ).join("");
-  if (files.length) status(`${files.length} archivos en total. Mostrando ${list.length}.`);
+// ---------- Búsqueda ----------
+
+async function runSearch() {
+  const term = $("q").value.trim();
+  const mode = $("mode").value;
+
+  if (!accounts.length) {
+    shown = [];
+    renderResults(false);
+    setSummary("Agrega una cuenta de Google para empezar.");
+    return;
+  }
+
+  if (mode === "content") {
+    if (!term) {
+      shown = [];
+      renderResults(false);
+      setSummary("Escribe una palabra y pulsa Buscar.");
+      return;
+    }
+    setSummary("Buscando en el contenido de tus archivos...");
+    shown = [];
+    const errs = [];
+    for (const acc of accounts) {
+      try {
+        const q = new URLSearchParams({
+          pageSize: "100",
+          fields: "files(id,name,size)",
+          q: `trashed=false and not mimeType contains 'application/vnd.google-apps' and fullText contains '${escQ(term)}'`
+        });
+        const j = await (await api(acc, `${DRIVE}/files?` + q)).json();
+        shown.push(...(j.files || []).map(f => ({ id: f.id, name: f.name, size: Number(f.size), acc: acc.email })));
+      } catch (e) {
+        errs.push(e.message);
+      }
+    }
+    shown.sort(byName);
+    renderResults(false);
+    let msg = `${shown.length} coincidencias en el contenido.`;
+    if (errs.length) msg += " Errores: " + errs.join(" | ");
+    setSummary(msg);
+    return;
+  }
+
+  const t = term.toLowerCase();
+  if (!t) {
+    shown = files.slice().sort(byName);
+    renderResults(false);
+    setSummary(`${files.length} archivos en total.`);
+    return;
+  }
+
+  if (mode === "exact") {
+    shown = files.filter(f => f.name.toLowerCase() === t).sort(byName);
+    renderResults(true);
+    const emails = [...new Set(shown.map(f => f.acc))];
+    setSummary(shown.length
+      ? `Encontrado en ${emails.length} cuenta(s): ${emails.join(", ")}`
+      : "No aparece en ninguna cuenta conectada.");
+  } else {
+    shown = files.filter(f => f.name.toLowerCase().includes(t)).sort(byName);
+    renderResults(false);
+    setSummary(`${shown.length} coincidencias por nombre.`);
+  }
+}
+
+function renderResults(highlight) {
+  const list = shown.slice(0, 300);
+  if (!list.length) {
+    $("results").innerHTML = '<p class="empty">Sin resultados</p>';
+    return;
+  }
+  $("results").innerHTML = list.map((f, i) => `
+    <div class="item${highlight ? " hit" : ""}" style="--c:${colorOf(f.acc)}">
+      <div class="side"></div>
+      <div class="info">
+        <div class="name">${esc(f.name)}</div>
+        <div class="meta"><span class="badge">${esc(f.acc)}</span><span>${fmt(f.size)}</span></div>
+      </div>
+      <button class="ghost small" data-dl="${i}">Descargar</button>
+    </div>`).join("") +
+    (shown.length > 300 ? `<p class="muted">Mostrando 300 de ${shown.length}. Afina la búsqueda.</p>` : "");
 }
 
 // ---------- Descargar y subir ----------
 
 async function download(i) {
-  const f = files[i];
+  const f = shown[i];
   const acc = accounts.find(a => a.email === f.acc);
   try {
     const r = await api(acc, `${DRIVE}/files/${f.id}?alt=media`);
@@ -246,7 +330,22 @@ async function uploadFile() {
   }
 }
 
+// ---------- Arranque ----------
+
+document.addEventListener("click", e => {
+  const dl = e.target.closest("[data-dl]");
+  if (dl) return download(Number(dl.dataset.dl));
+  const rm = e.target.closest("[data-rm]");
+  if (rm) removeAccount(rm.dataset.rm);
+});
+
 window.addEventListener("load", () => {
+  $("addBtn").onclick = connect;
+  $("upBtn").onclick = uploadFile;
+  $("go").onclick = runSearch;
+  $("mode").onchange = runSearch;
+  $("q").oninput = () => { if ($("mode").value !== "content") runSearch(); };
+  $("q").onkeydown = e => { if (e.key === "Enter") runSearch(); };
   initAuth();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 });
