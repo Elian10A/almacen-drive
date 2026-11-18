@@ -1,22 +1,26 @@
 // Pega aquí tu Client ID de Google Cloud
 const CLIENT_ID = "685413975165-tgeug7mgpu3p7ku8it4eh8l31cj5kfni.apps.googleusercontent.com";
+// Pega aquí tu Client ID de Google Cloud
+const CLIENT_ID = "TU_CLIENT_ID.apps.googleusercontent.com";
 const SCOPE = "https://www.googleapis.com/auth/drive";
 const DRIVE = "https://www.googleapis.com/drive/v3";
-const PALETTE = ["#2563eb", "#059669", "#d97706", "#db2777", "#7c3aed", "#0891b2"];
+const PALETTE = ["#f5a524", "#3b82f6", "#22c55e", "#ec4899", "#a855f7", "#06b6d4"];
+const IDLE_MS = 15 * 60 * 1000;
 
 let tokenClient = null;
 let pending = null;
-let accounts = JSON.parse(localStorage.getItem("accounts") || "[]");
-let files = [];   // todos los archivos de todas las cuentas (nombres)
-let shown = [];   // lo que se muestra en resultados
+let queue = Promise.resolve();
+let key = null;          // clave AES en memoria, solo mientras la app está desbloqueada
+let accounts = [];
+let files = [];
+let shown = [];
+let lastActive = Date.now();
 
 const $ = id => document.getElementById(id);
-
-function save() {
-  localStorage.setItem("accounts", JSON.stringify(
-    accounts.map(a => ({ email: a.email, token: a.token, exp: a.exp }))
-  ));
-}
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -36,23 +40,123 @@ function colorOf(email) {
 }
 
 function escQ(s) { return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
-
 function setSummary(msg) { $("summary").textContent = msg; }
-
 const byName = (a, b) => a.name.localeCompare(b.name);
 
-// ---------- Autenticación ----------
+// ---------- Cifrado ----------
 
-function initAuth() {
-  if (!window.google) return setTimeout(initAuth, 300);
+async function deriveKey(pass, salt) {
+  const base = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 250000, hash: "SHA-256" },
+    base,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+// Guarda las cuentas cifradas. El token nunca queda en texto plano.
+async function persist() {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plain = enc.encode(JSON.stringify(
+    accounts.map(a => ({ email: a.email, token: a.token, exp: a.exp }))
+  ));
+  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain);
+  localStorage.setItem("vault", JSON.stringify({ iv: b64(iv), data: b64(data) }));
+}
+
+function persistSafe() {
+  persist().catch(e => setSummary("No se pudo guardar: " + e.message));
+}
+
+// ---------- Bloqueo ----------
+
+function hasVault() { return !!localStorage.getItem("vault"); }
+
+function showLock() {
+  const setup = !hasVault();
+  $("lock").style.display = "flex";
+  $("lockTitle").textContent = setup ? "Crea una contraseña" : "Desbloquear";
+  $("lockHint").textContent = setup
+    ? "Protege tus cuentas. Si la olvidas no hay forma de recuperarla; tendrías que volver a agregar las cuentas."
+    : "Introduce tu contraseña para ver tus cuentas.";
+  $("lockPass2").style.display = setup ? "block" : "none";
+  $("lockBtn").textContent = setup ? "Crear" : "Entrar";
+  $("lockPass").value = "";
+  $("lockPass2").value = "";
+  $("lockMsg").textContent = "";
+  $("lockPass").focus();
+}
+
+async function submitLock() {
+  const pass = $("lockPass").value;
+  const setup = !hasVault();
+  $("lockMsg").textContent = "";
+  if (!pass) { $("lockMsg").textContent = "Escribe la contraseña"; return; }
+  $("lockBtn").disabled = true;
+  try {
+    if (setup) {
+      if (pass.length < 8) throw new Error("Usa al menos 8 caracteres (recomendado 12 o más)");
+      if (pass !== $("lockPass2").value) throw new Error("Las contraseñas no coinciden");
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      localStorage.setItem("vsalt", b64(salt));
+      key = await deriveKey(pass, salt);
+      accounts = [];
+      await persist();
+    } else {
+      const salt = unb64(localStorage.getItem("vsalt"));
+      const k = await deriveKey(pass, salt);
+      const v = JSON.parse(localStorage.getItem("vault"));
+      let plain;
+      try {
+        plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(v.iv) }, k, unb64(v.data));
+      } catch {
+        throw new Error("Contraseña incorrecta");
+      }
+      key = k;
+      accounts = JSON.parse(dec.decode(plain));
+    }
+    $("lock").style.display = "none";
+    lastActive = Date.now();
+    renderAccounts();
+    if (accounts.length) refreshAll();
+    else setSummary("Agrega una cuenta de Google para empezar.");
+  } catch (e) {
+    $("lockMsg").textContent = e.message;
+  } finally {
+    $("lockBtn").disabled = false;
+  }
+}
+
+function lock() {
+  key = null;
+  accounts = [];
+  files = [];
+  shown = [];
+  $("results").innerHTML = "";
+  setSummary("");
+  renderAccounts();
+  showLock();
+}
+
+setInterval(() => {
+  if (key && Date.now() - lastActive > IDLE_MS) lock();
+}, 30000);
+
+["pointerdown", "keydown", "scroll"].forEach(ev =>
+  document.addEventListener(ev, () => { lastActive = Date.now(); }, { passive: true })
+);
+
+// ---------- Autenticación Google ----------
+
+function initGis() {
+  if (!window.google) return setTimeout(initGis, 300);
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPE,
     callback: onToken
   });
-  renderAccounts();
-  if (accounts.length) refreshAll();
-  else setSummary("Agrega una cuenta de Google para empezar.");
 }
 
 async function onToken(r) {
@@ -74,7 +178,8 @@ async function onToken(r) {
     if (!acc) { acc = { email }; accounts.push(acc); }
     acc.token = r.access_token;
     acc.exp = Date.now() + Number(r.expires_in) * 1000;
-    save();
+    acc.error = "";
+    persistSafe();
 
     if (p && p.email && p.email !== email) {
       p.reject(new Error("Se conectó " + email + " pero se esperaba " + p.email));
@@ -91,18 +196,32 @@ async function onToken(r) {
 }
 
 function connect() {
+  if (!key) return;
   if (!tokenClient) return setSummary("Google todavía está cargando, intenta de nuevo.");
   pending = null;
   tokenClient.requestAccessToken({ prompt: "select_account" });
 }
 
+// Pide tokens de una cuenta de una en una, con límite de tiempo.
+// Así una cuenta que no responde no bloquea a las demás.
 function tokenFor(acc) {
   if (acc.token && Date.now() < acc.exp - 60000) return Promise.resolve(acc.token);
-  return new Promise((resolve, reject) => {
-    if (!tokenClient) return reject(new Error("Google no está listo"));
-    pending = { email: acc.email, resolve: () => resolve(acc.token), reject };
+  const job = () => new Promise((resolve, reject) => {
+    if (!tokenClient) return reject(new Error("Google todavía está cargando"));
+    const timer = setTimeout(() => {
+      if (pending && pending.email === acc.email) pending = null;
+      reject(new Error("Sesión caducada. Pulsa Agregar cuenta y elígela de nuevo."));
+    }, 15000);
+    pending = {
+      email: acc.email,
+      resolve: t => { clearTimeout(timer); resolve(t); },
+      reject: e => { clearTimeout(timer); reject(e); }
+    };
     tokenClient.requestAccessToken({ prompt: "", hint: acc.email });
   });
+  const run = queue.then(job);
+  queue = run.catch(() => {});
+  return run;
 }
 
 function removeAccount(email) {
@@ -111,7 +230,7 @@ function removeAccount(email) {
   if (acc && acc.token && window.google) google.accounts.oauth2.revoke(acc.token, () => {});
   accounts = accounts.filter(a => a.email !== email);
   files = files.filter(f => f.acc !== email);
-  save();
+  persistSafe();
   renderAccounts();
   runSearch();
 }
@@ -161,8 +280,9 @@ async function refreshAll() {
       acc.quota = null;
       acc.error = e.message;
     }
+    renderAccounts();
   }
-  save();
+  persistSafe();
   renderAccounts();
   if ($("mode").value !== "content") runSearch();
 }
@@ -346,6 +466,19 @@ window.addEventListener("load", () => {
   $("mode").onchange = runSearch;
   $("q").oninput = () => { if ($("mode").value !== "content") runSearch(); };
   $("q").onkeydown = e => { if (e.key === "Enter") runSearch(); };
-  initAuth();
+
+  $("lockBtn").onclick = submitLock;
+  $("lockPass").onkeydown = e => { if (e.key === "Enter") submitLock(); };
+  $("lockPass2").onkeydown = e => { if (e.key === "Enter") submitLock(); };
+
+  const lockBtn = document.createElement("button");
+  lockBtn.className = "ghost";
+  lockBtn.textContent = "Bloquear";
+  lockBtn.style.marginLeft = "8px";
+  lockBtn.onclick = lock;
+  $("addBtn").insertAdjacentElement("afterend", lockBtn);
+
+  initGis();
+  showLock();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 });
