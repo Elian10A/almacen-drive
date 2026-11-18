@@ -6,48 +6,243 @@
 <title>Mi Drive</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg">
-<meta name="theme-color" content="#1f2937">
+<meta name="theme-color" content="#0c0c0e">
 <style>
-body{font-family:system-ui,sans-serif;margin:0;background:#f3f4f6;color:#111827}
-header{background:#1f2937;color:#fff;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px))}
-main{padding:12px;max-width:900px;margin:auto}
-.card{background:#fff;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px #0002}
-button{padding:8px 12px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;margin:2px 6px 2px 0}
-button.sec{background:#6b7280}
-.bar{height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden;margin:6px 0 10px}
-.bar>div{height:100%;background:#2563eb}
-table{width:100%;border-collapse:collapse;font-size:14px}
-td,th{padding:6px;border-bottom:1px solid #e5e7eb;text-align:left}
-input[type=search]{width:100%;padding:8px;box-sizing:border-box;font-size:16px}
-.muted{color:#6b7280;font-size:13px}
-.err{color:#b91c1c;font-size:13px}
-.name{word-break:break-word}
+:root{
+  --bg:#0c0c0e;--side:#101013;--card:#141418;--card2:#1a1a20;
+  --line:#26262d;--line2:#1d1d23;
+  --ink:#f4f4f5;--muted:#8e8e99;--dim:#5e5e68;
+  --amber:#f5a524;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;
+  --r:12px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:Inter,"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  font-size:14px;-webkit-font-smoothing:antialiased;
+}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+
+/* Barra lateral */
+aside{
+  background:var(--side);border-right:1px solid var(--line2);
+  padding:20px 14px;display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;
+}
+.logo{font-weight:700;font-size:17px;padding:0 6px;letter-spacing:.01em}
+.logo span{color:var(--amber)}
+.tag{color:var(--blue);font-size:12px;padding:4px 6px 0}
+.nav-label{
+  font-size:10px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;
+  margin:24px 8px 8px;
+}
+.nav a{
+  display:block;padding:9px 10px;border-radius:8px;color:var(--muted);
+  text-decoration:none;margin-bottom:2px;transition:background .15s,color .15s;
+}
+.nav a:hover{color:var(--ink);background:var(--card2)}
+.nav a.on{color:var(--amber);background:var(--card2);border:1px solid var(--line)}
+.side-foot{margin-top:auto;border-top:1px solid var(--line2);padding-top:14px;font-size:12px;color:var(--muted)}
+.side-foot b{display:block;color:var(--ink);font-weight:600;font-size:13px;margin-bottom:2px}
+
+/* Contenido */
+main{padding:0 28px 40px;min-width:0}
+.topbar{
+  display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
+  padding:26px 0 18px;flex-wrap:wrap;
+}
+.hello{color:var(--muted);font-size:13px}
+h1{margin:6px 0 0;font-size:26px;font-weight:700}
+.clock{text-align:right;color:var(--muted);font-size:12px}
+.clock b{display:block;color:var(--ink);font-size:20px;font-weight:700;margin-top:4px}
+.strip{
+  background:var(--card);border:1px solid var(--line);border-radius:8px;
+  padding:10px 14px;font-size:13px;color:var(--muted);margin-bottom:18px;
+  display:flex;align-items:center;gap:8px;
+}
+.strip .dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex:none}
+
+/* Paneles */
+.panel{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px;margin-bottom:14px;scroll-margin-top:16px;
+}
+.head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+h2{margin:0;font-size:14px;font-weight:600}
+.pill{font-size:12px;color:var(--muted);background:var(--card2);border:1px solid var(--line);padding:4px 10px;border-radius:999px}
+
+/* Botones */
+.btn{
+  background:var(--amber);color:#111;border:0;border-radius:8px;
+  padding:9px 16px;font:600 14px/1 inherit;cursor:pointer;font-family:inherit;
+  transition:filter .15s;
+}
+.btn:hover{filter:brightness(1.08)}
+.ghost{
+  background:transparent;color:var(--muted);border:1px solid var(--line);
+  border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;font-family:inherit;
+}
+.ghost:hover{color:var(--ink);border-color:var(--dim)}
+.small{padding:5px 10px}
+
+/* Cuentas */
+.accounts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.acc{
+  background:var(--card2);border:1px solid var(--line);border-radius:10px;
+  padding:14px;border-left:3px solid var(--c);
+}
+.acc-top{display:flex;align-items:center;gap:8px;font-weight:600;word-break:break-all}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--c);flex:none}
+.acc p{margin:6px 0 0}
+.bar{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin:12px 0}
+.bar>div{height:100%;background:var(--amber);border-radius:99px;transition:width .5s}
+.bar.warn>div{background:#f97316}
+.bar.danger>div{background:var(--red)}
+
+/* Buscador */
+.search{display:grid;grid-template-columns:auto 1fr auto;gap:8px}
+select,input[type=search],input[type=file]{
+  font-family:inherit;font-size:14px;padding:10px 12px;min-width:0;
+  color:var(--ink);background:var(--bg);border:1px solid var(--line);
+  border-radius:8px;outline:none;
+}
+select:focus,input[type=search]:focus{border-color:var(--amber)}
+input[type=search]{width:100%}
+input[type=file]{color:var(--muted);max-width:100%;padding:8px}
+input[type=file]::file-selector-button{
+  margin-right:10px;border:1px solid var(--line);border-radius:6px;padding:6px 10px;
+  background:var(--card2);color:var(--ink);cursor:pointer;font-family:inherit;
+}
+.summary{margin:14px 0 10px;font-size:13px;color:var(--muted)}
+
+/* Resultados */
+.results{display:grid;gap:8px}
+.item{
+  display:flex;align-items:center;gap:12px;padding:12px 14px;
+  background:var(--card2);border:1px solid var(--line);border-radius:10px;
+}
+.item .side{width:3px;align-self:stretch;border-radius:3px;background:var(--c);flex:none}
+.item.hit{border-color:var(--c);background:color-mix(in srgb,var(--c) 10%,var(--card2))}
+.info{flex:1;min-width:0}
+.name{font-weight:600;word-break:break-word}
+.meta{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap;margin-top:4px}
+.badge{
+  padding:2px 8px;border-radius:6px;font-weight:600;font-size:12px;
+  color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent);
+}
+
+.upload{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.muted{color:var(--muted);font-size:13px}
+.err{color:var(--red);font-size:13px;margin:6px 0 0}
+.empty{color:var(--muted);text-align:center;padding:22px}
+
+/* Móvil */
+@media (max-width:760px){
+  .app{grid-template-columns:1fr}
+  aside{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px;padding:14px}
+  .logo{margin-right:auto}
+  .tag,.side-foot,.nav-label{display:none}
+  .nav{display:flex;gap:6px;flex-wrap:wrap}
+  .nav a{margin:0;padding:7px 10px;font-size:13px}
+  main{padding:0 14px 30px}
+  .search{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
-<header><strong>Mi Drive</strong></header>
-<main>
-  <div class="card">
-    <div id="accounts"></div>
-    <div id="totals" class="muted"></div>
-    <button onclick="connect()">Agregar cuenta de Google</button>
-  </div>
-  <div class="card">
-    <h3 style="margin-top:0">Subir archivo</h3>
-    <input type="file" id="file">
-    <button onclick="uploadFile()">Subir</button>
-    <div id="uploadStatus" class="muted"></div>
-  </div>
-  <div class="card">
-    <input type="search" id="search" placeholder="Buscar archivos" oninput="render()">
-    <div id="status" class="muted" style="margin:8px 0"></div>
-    <table>
-      <thead><tr><th>Nombre</th><th>Cuenta</th><th>Tamaño</th><th></th></tr></thead>
-      <tbody id="files"></tbody>
-    </table>
-  </div>
-</main>
+<div class="app">
+  <aside>
+    <div class="logo">Mi <span>Drive</span></div>
+    <div class="tag">Todas tus cuentas</div>
+
+    <div class="nav-label">General</div>
+    <nav class="nav">
+      <a href="#cuentas" class="on">Cuentas</a>
+      <a href="#buscar">Buscar</a>
+      <a href="#subir">Subir archivo</a>
+    </nav>
+
+    <div class="side-foot">
+      <b>Google Drive</b>
+      Varias cuentas conectadas
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div>
+        <div class="hello">Tu almacenamiento</div>
+        <h1>Mi Drive</h1>
+      </div>
+      <div class="clock">
+        Cuentas y espacio
+        <b id="clockNow"></b>
+      </div>
+    </div>
+
+    <div class="strip">
+      <span class="dot"></span>
+      Pulsa "Agregar cuenta" para conectar otra cuenta de Google.
+    </div>
+
+    <section class="panel" id="cuentas">
+      <div class="head">
+        <h2>Cuentas</h2>
+        <span id="totals" class="pill"></span>
+      </div>
+      <div style="margin-bottom:12px">
+        <button id="addBtn" class="btn">Agregar cuenta</button>
+      </div>
+      <div id="accounts" class="accounts"></div>
+    </section>
+
+    <section class="panel" id="buscar">
+      <div class="head"><h2>Buscar</h2></div>
+      <div class="search">
+        <select id="mode">
+          <option value="name">Por nombre</option>
+          <option value="exact">Dónde está (nombre exacto)</option>
+          <option value="content">En el contenido</option>
+        </select>
+        <input id="q" type="search" placeholder="Escribe un nombre o una palabra">
+        <button id="go" class="btn">Buscar</button>
+      </div>
+      <div id="summary" class="summary"></div>
+      <div id="results" class="results"></div>
+    </section>
+
+    <section class="panel" id="subir">
+      <div class="head"><h2>Subir archivo</h2></div>
+      <div class="upload">
+        <input type="file" id="file">
+        <button id="upBtn" class="btn">Subir a la cuenta con más espacio</button>
+      </div>
+      <div id="uploadStatus" class="muted" style="margin-top:10px"></div>
+    </section>
+  </main>
+</div>
+
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script src="app.js"></script>
+<script>
+  // Reloj de la cabecera
+  function tick(){
+    const d = new Date();
+    document.getElementById("clockNow").textContent =
+      d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+  }
+  tick(); setInterval(tick, 30000);
+
+  // Marca el enlace activo de la barra lateral al hacer scroll
+  const links = [...document.querySelectorAll(".nav a")];
+  window.addEventListener("scroll", () => {
+    let current = links[0].getAttribute("href").slice(1);
+    for (const a of links) {
+      const sec = document.getElementById(a.getAttribute("href").slice(1));
+      if (sec && sec.getBoundingClientRect().top < 120) current = sec.id;
+    }
+    links.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + current));
+  });
+</script>
 </body>
 </html>
